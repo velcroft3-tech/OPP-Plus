@@ -1,0 +1,1760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPP - Offline Presentation Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .resize-handle {
+            position: absolute;
+            background: #3b82f6;
+            border: 1px solid white;
+        }
+        .resize-handle-nw { top: -6px; left: -6px; width: 12px; height: 12px; cursor: nw-resize; }
+        .resize-handle-ne { top: -6px; right: -6px; width: 12px; height: 12px; cursor: ne-resize; }
+        .resize-handle-sw { bottom: -6px; left: -6px; width: 12px; height: 12px; cursor: sw-resize; }
+        .resize-handle-se { bottom: -6px; right: -6px; width: 12px; height: 12px; cursor: se-resize; }
+        .resize-handle-n { top: -3px; left: 20%; width: 60%; height: 6px; cursor: ns-resize; }
+        .resize-handle-s { bottom: -3px; left: 20%; width: 60%; height: 6px; cursor: ns-resize; }
+        .resize-handle-w { left: -3px; top: 20%; width: 6px; height: 60%; cursor: ew-resize; }
+        .resize-handle-e { right: -3px; top: 20%; width: 6px; height: 60%; cursor: ew-resize; }
+        
+        .slide-element {
+            position: absolute;
+            border: 2px solid transparent;
+        }
+        
+        .slide-element.selected {
+            border-color: #3b82f6;
+        }
+        
+        .slide-element:hover:not(.selected) {
+            border-color: #9ca3af;
+        }
+        
+        .presentation-mode {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: black;
+            z-index: 1000;
+        }
+        
+        .dropdown-menu {
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s;
+        }
+        
+        .dropdown:hover .dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .tool-btn.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .format-btn.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .align-btn.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app" class="h-screen flex flex-col bg-gray-50">
+        <!-- Header -->
+        <header class="bg-white border-b border-gray-200 px-4 py-2">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <h1 class="text-2xl font-bold text-blue-600">OPP</h1>
+                    <span class="text-sm text-gray-500">Offline Presentation Pro</span>
+                    <span id="saveIndicator" class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded" style="display: none;">
+                        ✓ Auto-saved <span id="saveTime"></span>
+                    </span>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button id="undoBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" disabled title="Undo (Ctrl+Z)">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                            <path d="M3 7v6h6"/>
+                            <path d="m21 17-3-3-3 3"/>
+                            <path d="M14 14h7a4 4 0 0 0 0-8h-1"/>
+                        </svg>
+                    </button>
+                    <button id="redoBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" disabled title="Redo (Ctrl+Y)">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                            <path d="m21 7-6-6v6h-7a4 4 0 0 0 0 8h1"/>
+                            <path d="M3 17l3-3 3 3"/>
+                        </svg>
+                    </button>
+                    <div class="shrink-0 bg-border w-[1px] h-6"></div>
+                    <button id="saveBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-green-50 hover:bg-green-100 text-green-700 h-9 rounded-md px-3" title="Save Now">
+                        💾 Save
+                    </button>
+                    <button id="presentBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-blue-600 text-primary-foreground hover:bg-blue-700 h-10 px-4 py-2">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2">
+                            <polygon points="5,3 19,12 5,21 5,3"/>
+                        </svg>
+                        Present
+                    </button>
+                    <div class="relative dropdown">
+                        <button class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7,10 12,15 17,10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Export
+                        </button>
+                        <div class="dropdown-menu absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                            <button id="exportJsonBtn" class="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-t-lg">📄 Export as JSON</button>
+                            <button id="exportImageBtn" class="w-full text-left px-4 py-2 hover:bg-gray-50">🖼️ Export Current Slide as Image</button>
+                            <button id="downloadHtmlBtn" class="w-full text-left px-4 py-2 hover:bg-gray-50">📱 Download as Offline HTML File</button>
+                            <button id="exportPdfBtn" class="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-b-lg">📋 Export as PDF (Coming Soon)</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-1 flex">
+            <!-- Slide Thumbnails Panel -->
+            <div class="w-64 bg-white border-r border-gray-200 flex flex-col">
+                <div class="p-4 border-b border-gray-200">
+                    <button id="addSlideBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-blue-600 text-primary-foreground hover:bg-blue-700 h-10 px-4 py-2 w-full">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2">
+                            <path d="M5 12h14"/>
+                            <path d="M12 5v14"/>
+                        </svg>
+                        Add Slide
+                    </button>
+                </div>
+                
+                <div id="slidesList" class="flex-1 overflow-y-auto p-2">
+                    <!-- Slides will be dynamically added here -->
+                </div>
+            </div>
+
+            <!-- Import Panel (initially hidden) -->
+            <div id="importPanel" class="w-80 bg-white border-r border-gray-200 flex flex-col" style="display: none;">
+                <div class="flex items-center justify-between p-4 border-b border-gray-200">
+                    <h3 class="font-semibold text-lg">Import</h3>
+                    <button id="closeImportBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                            <path d="M18 6L6 18"/>
+                            <path d="M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="flex border-b border-gray-200">
+                    <button class="import-tab active flex-1 px-3 py-2 text-sm font-medium bg-blue-50 text-blue-600 border-b-2 border-blue-600" data-tab="upload">
+                        📁<br>Upload
+                    </button>
+                    <button class="import-tab flex-1 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900" data-tab="search">
+                        🔍<br>Search
+                    </button>
+                    <button class="import-tab flex-1 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900" data-tab="url">
+                        🔗<br>URL
+                    </button>
+                    <button class="import-tab flex-1 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900" data-tab="icons">
+                        🎨<br>Icons
+                    </button>
+                </div>
+
+                <div id="importContent" class="flex-1 p-4 overflow-y-auto">
+                    <!-- Import content will be dynamically loaded here -->
+                </div>
+            </div>
+
+            <!-- Main Editor -->
+            <div class="flex-1 flex flex-col">
+                <!-- Toolbar -->
+                <div class="bg-white border-b border-gray-200 p-2">
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-1 border-r border-gray-200 pr-2">
+                            <button id="selectTool" class="tool-btn active inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700 h-9 rounded-md px-3" data-tool="select" title="Select">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <polyline points="5,9 2,12 5,15"/>
+                                    <polyline points="9,5 12,2 15,5"/>
+                                    <polyline points="15,19 12,22 9,19"/>
+                                    <polyline points="19,9 22,12 19,15"/>
+                                    <line x1="2" y1="12" x2="22" y2="12"/>
+                                    <line x1="12" y1="2" x2="12" y2="22"/>
+                                </svg>
+                            </button>
+                            <button id="textTool" class="tool-btn inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" data-tool="text" title="Text">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <polyline points="4,7 4,4 20,4 20,7"/>
+                                    <line x1="9" y1="20" x2="15" y2="20"/>
+                                    <line x1="12" y1="4" x2="12" y2="20"/>
+                                </svg>
+                            </button>
+                            <button id="rectangleTool" class="tool-btn inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" data-tool="rectangle" title="Rectangle">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+                                </svg>
+                            </button>
+                            <button id="circleTool" class="tool-btn inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" data-tool="circle" title="Circle">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <circle cx="12" cy="12" r="10"/>
+                                </svg>
+                            </button>
+                            <button id="importBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" title="Import Media">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+                                    <circle cx="9" cy="9" r="2"/>
+                                    <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                                </svg>
+                                Import
+                            </button>
+                        </div>
+                        
+                        <!-- Text Formatting Controls -->
+                        <div id="textFormattingControls" class="flex items-center gap-1 border-r border-gray-200 pr-2" style="display: none;">
+                            <select id="fontSizeSelect" class="text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="8">8px</option>
+                                <option value="10">10px</option>
+                                <option value="12">12px</option>
+                                <option value="14">14px</option>
+                                <option value="16" selected>16px</option>
+                                <option value="18">18px</option>
+                                <option value="20">20px</option>
+                                <option value="24">24px</option>
+                                <option value="28">28px</option>
+                                <option value="32">32px</option>
+                                <option value="36">36px</option>
+                                <option value="48">48px</option>
+                                <option value="60">60px</option>
+                                <option value="72">72px</option>
+                            </select>
+                            
+                            <button id="boldBtn" class="format-btn inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" title="Bold">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/>
+                                    <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/>
+                                </svg>
+                            </button>
+                            <button id="italicBtn" class="format-btn inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" title="Italic">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <line x1="19" y1="4" x2="10" y2="4"/>
+                                    <line x1="14" y1="20" x2="5" y2="20"/>
+                                    <line x1="15" y1="4" x2="9" y2="20"/>
+                                </svg>
+                            </button>
+                            
+                            <input id="textColorPicker" type="color" value="#000000" class="w-8 h-8 border border-gray-300 rounded cursor-pointer" title="Text Color">
+                        </div>
+                        
+                        <div id="textAlignControls" class="flex items-center gap-1 border-r border-gray-200 pr-2" style="display: none;">
+                            <button id="alignLeftBtn" class="align-btn active inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700 h-9 rounded-md px-3" data-align="left" title="Align Left">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <line x1="21" y1="10" x2="7" y2="10"/>
+                                    <line x1="21" y1="6" x2="3" y2="6"/>
+                                    <line x1="21" y1="14" x2="3" y2="14"/>
+                                    <line x1="21" y1="18" x2="7" y2="18"/>
+                                </svg>
+                            </button>
+                            <button id="alignCenterBtn" class="align-btn inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" data-align="center" title="Align Center">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <line x1="18" y1="10" x2="6" y2="10"/>
+                                    <line x1="21" y1="6" x2="3" y2="6"/>
+                                    <line x1="21" y1="14" x2="3" y2="14"/>
+                                    <line x1="18" y1="18" x2="6" y2="18"/>
+                                </svg>
+                            </button>
+                            <button id="alignRightBtn" class="align-btn inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" data-align="right" title="Align Right">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <line x1="17" y1="10" x2="3" y2="10"/>
+                                    <line x1="21" y1="6" x2="3" y2="6"/>
+                                    <line x1="21" y1="14" x2="3" y2="14"/>
+                                    <line x1="17" y1="18" x2="3" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <!-- Element Controls -->
+                        <div id="elementControls" class="flex items-center gap-1" style="display: none;">
+                            <button id="bringFrontBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" title="Bring to Front">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <path d="m9 18 6-6-6-6"/>
+                                </svg>
+                            </button>
+                            <button id="sendBackBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" title="Send to Back">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <path d="m15 18-6-6 6-6"/>
+                                </svg>
+                            </button>
+                            <button id="duplicateBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" title="Duplicate (Ctrl+D)">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                                </svg>
+                            </button>
+                            <button id="deleteBtn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3" title="Delete">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <path d="M3 6h18"/>
+                                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Canvas -->
+                <div class="flex-1 p-8 overflow-auto bg-gray-100">
+                    <div class="max-w-4xl mx-auto">
+                        <div class="rounded-lg border bg-white shadow-lg">
+                            <div id="canvas" class="relative w-full cursor-crosshair overflow-hidden" style="min-height: 600px; aspect-ratio: 4/3; background-color: #ffffff;">
+                                <!-- Slide elements will be dynamically added here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Presentation Mode (initially hidden) -->
+    <div id="presentationMode" class="presentation-mode" style="display: none;">
+        <div id="presentationSlide" class="w-full h-full flex items-center justify-center" style="background-color: #ffffff;">
+            <!-- Presentation content will be dynamically loaded here -->
+        </div>
+        
+        <div class="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-black bg-opacity-70 px-6 py-3 rounded-lg">
+            <button id="prevSlideBtn" class="text-white hover:bg-white hover:bg-opacity-20 px-3 py-1 rounded" title="Previous slide (←)">
+                ← Previous
+            </button>
+            <span id="slideCounter" class="text-white text-sm font-medium">
+                1 / 1
+            </span>
+            <button id="nextSlideBtn" class="text-white hover:bg-white hover:bg-opacity-20 px-3 py-1 rounded" title="Next slide (→)">
+                Next →
+            </button>
+            <button id="exitPresentationBtn" class="text-white hover:bg-white hover:bg-opacity-20 px-3 py-1 rounded" title="Exit presentation (ESC)">
+                Exit (ESC)
+            </button>
+        </div>
+        
+        <div class="fixed top-4 right-4 bg-black bg-opacity-50 text-white text-xs px-3 py-2 rounded">
+            ← → Arrow keys to navigate • ESC to exit • Space/Click for next
+        </div>
+    </div>
+
+    <script>
+        // Application State
+        let slides = [
+            {
+                id: '1',
+                title: 'Welcome to OPP',
+                elements: [
+                    {
+                        id: 'title-1',
+                        type: 'text',
+                        x: 100,
+                        y: 200,
+                        width: 600,
+                        height: 80,
+                        rotation: 0,
+                        content: 'Welcome to OPP',
+                        style: {
+                            fontSize: 48,
+                            fontWeight: 'bold',
+                            textAlign: 'center',
+                            color: '#1f2937',
+                            zIndex: 1
+                        },
+                        visible: true,
+                        locked: false
+                    },
+                    {
+                        id: 'subtitle-1',
+                        type: 'text',
+                        x: 100,
+                        y: 300,
+                        width: 600,
+                        height: 40,
+                        rotation: 0,
+                        content: 'Offline Presentation Pro - Create stunning presentations',
+                        style: {
+                            fontSize: 20,
+                            textAlign: 'center',
+                            color: '#6b7280',
+                            zIndex: 2
+                        },
+                        visible: true,
+                        locked: false
+                    }
+                ],
+                backgroundColor: '#ffffff'
+            }
+        ];
+
+        let currentSlideIndex = 0;
+        let selectedElement = null;
+        let currentTool = 'select';
+        let isEditing = null;
+        let isPresentationMode = false;
+        let showImportPanel = false;
+        let importTab = 'upload';
+        let lastSaved = null;
+        let autoSaveEnabled = true;
+
+        // Drag and resize state
+        let isDragging = false;
+        let isResizing = false;
+        let dragStart = { x: 0, y: 0 };
+        let resizeHandle = '';
+        let clipboard = null;
+
+        // History for undo/redo
+        let history = [{ slides: JSON.parse(JSON.stringify(slides)), currentSlideIndex: 0 }];
+        let historyIndex = 0;
+
+        // Initialize the application
+        function init() {
+            loadFromLocalStorage();
+            renderSlides();
+            renderCanvas();
+            setupEventListeners();
+            updateUI();
+            autoSave();
+        }
+
+        // Local Storage Functions
+        function saveToLocalStorage() {
+            try {
+                const saveData = {
+                    slides,
+                    currentSlideIndex,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem('opp-presentation', JSON.stringify(saveData));
+                lastSaved = new Date();
+                updateSaveIndicator();
+                console.log('Presentation auto-saved');
+            } catch (error) {
+                console.error('Failed to save presentation:', error);
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const saved = localStorage.getItem('opp-presentation');
+                if (saved) {
+                    const saveData = JSON.parse(saved);
+                    if (saveData.slides && Array.isArray(saveData.slides)) {
+                        slides = saveData.slides;
+                        currentSlideIndex = saveData.currentSlideIndex || 0;
+                        lastSaved = new Date(saveData.timestamp);
+                        console.log('Presentation loaded from auto-save');
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load saved presentation:', error);
+            }
+        }
+
+        function updateSaveIndicator() {
+            const indicator = document.getElementById('saveIndicator');
+            const timeSpan = document.getElementById('saveTime');
+            if (lastSaved) {
+                timeSpan.textContent = lastSaved.toLocaleTimeString();
+                indicator.style.display = 'inline-block';
+            }
+        }
+
+        function autoSave() {
+            if (autoSaveEnabled) {
+                setTimeout(() => {
+                    saveToLocalStorage();
+                    autoSave();
+                }, 3000);
+            }
+        }
+
+        // History Functions
+        function saveToHistory() {
+            const newState = {
+                slides: JSON.parse(JSON.stringify(slides)),
+                currentSlideIndex
+            };
+            
+            const newHistory = history.slice(0, historyIndex + 1);
+            newHistory.push(newState);
+            
+            if (newHistory.length > 50) {
+                newHistory.shift();
+            } else {
+                historyIndex++;
+            }
+            
+            history = newHistory;
+            updateUndoRedoButtons();
+        }
+
+        function undo() {
+            if (historyIndex > 0) {
+                const prevState = history[historyIndex - 1];
+                slides = prevState.slides;
+                currentSlideIndex = prevState.currentSlideIndex;
+                historyIndex--;
+                renderSlides();
+                renderCanvas();
+                updateUndoRedoButtons();
+            }
+        }
+
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                const nextState = history[historyIndex + 1];
+                slides = nextState.slides;
+                currentSlideIndex = nextState.currentSlideIndex;
+                historyIndex++;
+                renderSlides();
+                renderCanvas();
+                updateUndoRedoButtons();
+            }
+        }
+
+        function updateUndoRedoButtons() {
+            document.getElementById('undoBtn').disabled = historyIndex <= 0;
+            document.getElementById('redoBtn').disabled = historyIndex >= history.length - 1;
+        }
+
+        // Slide Management Functions
+        function addSlide() {
+            const newSlide = {
+                id: Date.now().toString(),
+                title: `Slide ${slides.length + 1}`,
+                elements: [],
+                backgroundColor: '#ffffff'
+            };
+            slides.push(newSlide);
+            currentSlideIndex = slides.length - 1;
+            renderSlides();
+            renderCanvas();
+            saveToHistory();
+        }
+
+        function deleteSlide(index) {
+            if (slides.length > 1) {
+                slides.splice(index, 1);
+                if (currentSlideIndex >= slides.length) {
+                    currentSlideIndex = slides.length - 1;
+                }
+                renderSlides();
+                renderCanvas();
+                saveToHistory();
+            }
+        }
+
+        function duplicateSlide(index) {
+            const slideToClone = slides[index];
+            const newSlide = {
+                ...slideToClone,
+                id: Date.now().toString(),
+                title: slideToClone.title + ' (Copy)',
+                elements: slideToClone.elements.map(el => ({
+                    ...el,
+                    id: el.id + '-copy-' + Date.now()
+                }))
+            };
+            slides.splice(index + 1, 0, newSlide);
+            currentSlideIndex = index + 1;
+            renderSlides();
+            renderCanvas();
+            saveToHistory();
+        }
+
+        function selectSlide(index) {
+            currentSlideIndex = index;
+            selectedElement = null;
+            renderSlides();
+            renderCanvas();
+            updateUI();
+        }
+
+        // Element Management Functions
+        function addElement(type, x, y, imageUrl) {
+            const currentSlide = slides[currentSlideIndex];
+            const newElement = {
+                id: Date.now().toString(),
+                type,
+                x: Math.max(0, x - 10),
+                y: Math.max(0, y - 10),
+                width: type === 'text' ? 200 : type === 'image' ? 300 : 100,
+                height: type === 'text' ? 50 : type === 'image' ? 200 : 100,
+                rotation: 0,
+                content: type === 'text' ? 'Click to edit text' : type === 'image' ? imageUrl : undefined,
+                style: type === 'text' ? {
+                    fontSize: 18,
+                    color: '#1f2937',
+                    zIndex: currentSlide.elements.length + 1,
+                    textAlign: 'left'
+                } : {
+                    backgroundColor: type === 'shape' ? '#3b82f6' : undefined,
+                    zIndex: currentSlide.elements.length + 1
+                },
+                shapeType: type === 'shape' ? currentTool : undefined,
+                visible: true,
+                locked: false
+            };
+
+            currentSlide.elements.push(newElement);
+            selectedElement = newElement.id;
+            
+            if (type === 'text') {
+                setTimeout(() => startEditing(newElement.id), 100);
+            }
+            
+            renderCanvas();
+            updateUI();
+            saveToHistory();
+        }
+
+        function updateElement(elementId, updates) {
+            const currentSlide = slides[currentSlideIndex];
+            const elementIndex = currentSlide.elements.findIndex(el => el.id === elementId);
+            if (elementIndex !== -1) {
+                currentSlide.elements[elementIndex] = { ...currentSlide.elements[elementIndex], ...updates };
+                renderCanvas();
+            }
+        }
+
+        function deleteElement(elementId) {
+            const currentSlide = slides[currentSlideIndex];
+            currentSlide.elements = currentSlide.elements.filter(el => el.id !== elementId);
+            selectedElement = null;
+            renderCanvas();
+            updateUI();
+            saveToHistory();
+        }
+
+        function duplicateElement() {
+            if (!selectedElement) return;
+            
+            const currentSlide = slides[currentSlideIndex];
+            const element = currentSlide.elements.find(el => el.id === selectedElement);
+            if (element) {
+                const newElement = {
+                    ...element,
+                    id: Date.now().toString(),
+                    x: element.x + 20,
+                    y: element.y + 20
+                };
+                
+                currentSlide.elements.push(newElement);
+                selectedElement = newElement.id;
+                renderCanvas();
+                updateUI();
+                saveToHistory();
+            }
+        }
+
+        function moveElementLayer(elementId, direction) {
+            const currentSlide = slides[currentSlideIndex];
+            const element = currentSlide.elements.find(el => el.id === elementId);
+            if (!element) return;
+
+            let newZIndex = element.style?.zIndex || 1;
+            
+            switch (direction) {
+                case 'front':
+                    newZIndex = Math.max(...currentSlide.elements.map(el => el.style?.zIndex || 1)) + 1;
+                    break;
+                case 'back':
+                    newZIndex = 1;
+                    break;
+            }
+
+            updateElement(elementId, {
+                style: { ...element.style, zIndex: newZIndex }
+            });
+            saveToHistory();
+        }
+
+        // Text Editing Functions
+        function startEditing(elementId) {
+            isEditing = elementId;
+            renderCanvas();
+            
+            setTimeout(() => {
+                const textarea = document.querySelector(`[data-element-id="${elementId}"] textarea`);
+                if (textarea) {
+                    textarea.focus();
+                    textarea.select();
+                }
+            }, 50);
+        }
+
+        function stopEditing() {
+            if (isEditing) {
+                isEditing = null;
+                renderCanvas();
+                saveToHistory();
+            }
+        }
+
+        function formatText(property, value) {
+            if (!selectedElement) return;
+            
+            const currentSlide = slides[currentSlideIndex];
+            const element = currentSlide.elements.find(el => el.id === selectedElement);
+            if (!element || element.type !== 'text') return;
+
+            updateElement(selectedElement, {
+                style: { ...element.style, [property]: value }
+            });
+            updateUI();
+            saveToHistory();
+        }
+
+        // Tool Functions
+        function setTool(tool) {
+            currentTool = tool;
+            
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-blue-600', 'text-white');
+                btn.classList.add('hover:bg-accent', 'hover:text-accent-foreground');
+            });
+            
+            const activeBtn = document.querySelector(`[data-tool="${tool}"]`);
+            if (activeBtn) {
+                activeBtn.classList.add('active', 'bg-blue-600', 'text-white');
+                activeBtn.classList.remove('hover:bg-accent', 'hover:text-accent-foreground');
+            }
+        }
+
+        // Rendering Functions
+        function renderSlides() {
+            const slidesList = document.getElementById('slidesList');
+            slidesList.innerHTML = '';
+
+            slides.forEach((slide, index) => {
+                const slideDiv = document.createElement('div');
+                slideDiv.className = `mb-2 p-2 border-2 rounded cursor-pointer transition-colors ${
+                    index === currentSlideIndex 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                }`;
+                
+                slideDiv.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-medium">${index + 1}</span>
+                        <div class="flex gap-1">
+                            <button class="duplicate-slide-btn h-6 w-6 p-0 text-xs hover:bg-gray-200 rounded" data-index="${index}" title="Duplicate">
+                                📋
+                            </button>
+                            <button class="delete-slide-btn h-6 w-6 p-0 text-xs hover:bg-red-100 rounded ${slides.length === 1 ? 'opacity-50 cursor-not-allowed' : ''}" data-index="${index}" title="Delete" ${slides.length === 1 ? 'disabled' : ''}>
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                    <div class="w-full h-20 bg-gray-100 rounded border relative overflow-hidden" style="background-color: ${slide.backgroundColor};">
+                        ${slide.elements.slice(0, 3).map(element => {
+                            const left = (element.x / 800) * 100;
+                            const top = (element.y / 600) * 100;
+                            const width = Math.min((element.width / 800) * 100, 90);
+                            const height = Math.min((element.height / 600) * 100, 90);
+                            
+                            if (element.type === 'text') {
+                                return `<div class="absolute text-xs truncate" style="left: ${left}%; top: ${top}%; width: ${width}%; height: ${height}%; font-size: 8px; color: ${element.style?.color || '#000'};">${element.content || ''}</div>`;
+                            } else if (element.type === 'image') {
+                                return `<img src="${element.content}" class="absolute w-full h-full object-cover" style="left: ${left}%; top: ${top}%; width: ${width}%; height: ${height}%;">`;
+                            } else if (element.type === 'shape') {
+                                const borderRadius = element.shapeType === 'circle' ? '50%' : '0';
+                                return `<div class="absolute" style="left: ${left}%; top: ${top}%; width: ${width}%; height: ${height}%; background-color: ${element.style?.backgroundColor || '#3b82f6'}; border-radius: ${borderRadius};"></div>`;
+                            }
+                            return '';
+                        }).join('')}
+                    </div>
+                    <div class="text-xs text-gray-600 mt-1 truncate">${slide.title}</div>
+                `;
+                
+                slideDiv.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('duplicate-slide-btn') && !e.target.classList.contains('delete-slide-btn')) {
+                        selectSlide(index);
+                    }
+                });
+                
+                slidesList.appendChild(slideDiv);
+            });
+        }
+
+        function renderCanvas() {
+            const canvas = document.getElementById('canvas');
+            const currentSlide = slides[currentSlideIndex];
+            
+            canvas.style.backgroundColor = currentSlide.backgroundColor;
+            canvas.innerHTML = '';
+
+            const sortedElements = [...currentSlide.elements]
+                .filter(el => el.visible)
+                .sort((a, b) => (a.style?.zIndex || 1) - (b.style?.zIndex || 1));
+
+            sortedElements.forEach(element => {
+                const elementDiv = document.createElement('div');
+                elementDiv.className = `slide-element ${selectedElement === element.id ? 'selected' : ''}`;
+                elementDiv.dataset.elementId = element.id;
+                elementDiv.style.cssText = `
+                    left: ${element.x}px;
+                    top: ${element.y}px;
+                    width: ${element.width}px;
+                    height: ${element.height}px;
+                    transform: rotate(${element.rotation}deg);
+                    opacity: ${element.style?.opacity || 1};
+                    z-index: ${element.style?.zIndex || 1};
+                    cursor: ${element.locked ? 'not-allowed' : 'move'};
+                `;
+
+                if (element.type === 'text') {
+                    const textStyle = element.style || {};
+                    elementDiv.innerHTML = `
+                        <div class="w-full h-full flex items-center px-2 ${isEditing === element.id ? 'bg-blue-50 border-2 border-blue-300' : 'cursor-text'}" 
+                             style="font-size: ${textStyle.fontSize || 16}px; 
+                                    color: ${textStyle.color || '#000'}; 
+                                    font-weight: ${textStyle.fontWeight || 'normal'}; 
+                                    font-style: ${textStyle.fontStyle || 'normal'}; 
+                                    text-align: ${textStyle.textAlign || 'left'};">
+                            ${isEditing === element.id ? 
+                                `<textarea class="w-full h-full bg-transparent border-none outline-none resize-none text-inherit" 
+                                         style="font-size: ${textStyle.fontSize || 16}px; 
+                                                color: ${textStyle.color || '#000'}; 
+                                                font-weight: ${textStyle.fontWeight || 'normal'}; 
+                                                font-style: ${textStyle.fontStyle || 'normal'}; 
+                                                text-align: ${textStyle.textAlign || 'left'};">${element.content || ''}</textarea>` :
+                                `<div class="w-full h-full cursor-text" style="white-space: pre-wrap;">${element.content || 'Double-click to edit'}</div>`
+                            }
+                        </div>
+                    `;
+                } else if (element.type === 'image') {
+                    elementDiv.innerHTML = `<img src="${element.content}" alt="Slide content" class="w-full h-full object-cover rounded pointer-events-none">`;
+                } else if (element.type === 'shape') {
+                    const borderRadius = element.shapeType === 'circle' ? '50%' : '0';
+                    elementDiv.innerHTML = `<div class="w-full h-full pointer-events-none" style="background-color: ${element.style?.backgroundColor || '#3b82f6'}; border-radius: ${borderRadius};"></div>`;
+                }
+
+                // Add resize handles for selected element
+                if (selectedElement === element.id && !element.locked) {
+                    const handles = ['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'];
+                    handles.forEach(handle => {
+                        const handleDiv = document.createElement('div');
+                        handleDiv.className = `resize-handle resize-handle-${handle}`;
+                        handleDiv.dataset.handle = handle;
+                        elementDiv.appendChild(handleDiv);
+                    });
+                }
+
+                canvas.appendChild(elementDiv);
+            });
+        }
+
+        function updateUI() {
+            const currentSlide = slides[currentSlideIndex];
+            const selectedElementData = selectedElement 
+                ? currentSlide.elements.find(el => el.id === selectedElement)
+                : null;
+
+            // Show/hide formatting controls
+            const textFormattingControls = document.getElementById('textFormattingControls');
+            const textAlignControls = document.getElementById('textAlignControls');
+            const elementControls = document.getElementById('elementControls');
+
+            if (selectedElementData?.type === 'text') {
+                textFormattingControls.style.display = 'flex';
+                textAlignControls.style.display = 'flex';
+                
+                // Update controls with current values
+                document.getElementById('fontSizeSelect').value = selectedElementData.style?.fontSize || 16;
+                document.getElementById('textColorPicker').value = selectedElementData.style?.color || '#000000';
+                
+                // Update format buttons
+                const boldBtn = document.getElementById('boldBtn');
+                const italicBtn = document.getElementById('italicBtn');
+                
+                if (selectedElementData.style?.fontWeight === 'bold') {
+                    boldBtn.classList.add('active', 'bg-blue-600', 'text-white');
+                } else {
+                    boldBtn.classList.remove('active', 'bg-blue-600', 'text-white');
+                }
+                
+                if (selectedElementData.style?.fontStyle === 'italic') {
+                    italicBtn.classList.add('active', 'bg-blue-600', 'text-white');
+                } else {
+                    italicBtn.classList.remove('active', 'bg-blue-600', 'text-white');
+                }
+                
+                // Update alignment buttons
+                document.querySelectorAll('.align-btn').forEach(btn => {
+                    btn.classList.remove('active', 'bg-blue-600', 'text-white');
+                });
+                
+                const currentAlign = selectedElementData.style?.textAlign || 'left';
+                const alignBtn = document.querySelector(`[data-align="${currentAlign}"]`);
+                if (alignBtn) {
+                    alignBtn.classList.add('active', 'bg-blue-600', 'text-white');
+                }
+            } else {
+                textFormattingControls.style.display = 'none';
+                textAlignControls.style.display = 'none';
+            }
+
+            elementControls.style.display = selectedElement ? 'flex' : 'none';
+            
+            updateSaveIndicator();
+            updateUndoRedoButtons();
+        }
+
+        // Event Listeners
+        function setupEventListeners() {
+            // Slide management
+            document.getElementById('addSlideBtn').addEventListener('click', addSlide);
+
+            // Tools
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    setTool(btn.dataset.tool);
+                });
+            });
+
+            // Canvas events
+            const canvas = document.getElementById('canvas');
+            canvas.addEventListener('click', handleCanvasClick);
+            canvas.addEventListener('mousedown', handleCanvasMouseDown);
+
+            // Text formatting
+            document.getElementById('fontSizeSelect').addEventListener('change', (e) => {
+                formatText('fontSize', parseInt(e.target.value));
+            });
+
+            document.getElementById('boldBtn').addEventListener('click', () => {
+                const currentSlide = slides[currentSlideIndex];
+                const element = currentSlide.elements.find(el => el.id === selectedElement);
+                const isCurrentlyBold = element?.style?.fontWeight === 'bold';
+                formatText('fontWeight', isCurrentlyBold ? 'normal' : 'bold');
+            });
+
+            document.getElementById('italicBtn').addEventListener('click', () => {
+                const currentSlide = slides[currentSlideIndex];
+                const element = currentSlide.elements.find(el => el.id === selectedElement);
+                const isCurrentlyItalic = element?.style?.fontStyle === 'italic';
+                formatText('fontStyle', isCurrentlyItalic ? 'normal' : 'italic');
+            });
+
+            document.getElementById('textColorPicker').addEventListener('change', (e) => {
+                formatText('color', e.target.value);
+            });
+
+            // Text alignment
+            document.querySelectorAll('.align-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    formatText('textAlign', btn.dataset.align);
+                });
+            });
+
+            // Element controls
+            document.getElementById('bringFrontBtn').addEventListener('click', () => {
+                if (selectedElement) moveElementLayer(selectedElement, 'front');
+            });
+
+            document.getElementById('sendBackBtn').addEventListener('click', () => {
+                if (selectedElement) moveElementLayer(selectedElement, 'back');
+            });
+
+            document.getElementById('duplicateBtn').addEventListener('click', duplicateElement);
+
+            document.getElementById('deleteBtn').addEventListener('click', () => {
+                if (selectedElement) deleteElement(selectedElement);
+            });
+
+            // Header controls
+            document.getElementById('undoBtn').addEventListener('click', undo);
+            document.getElementById('redoBtn').addEventListener('click', redo);
+            document.getElementById('saveBtn').addEventListener('click', saveToLocalStorage);
+            document.getElementById('presentBtn').addEventListener('click', startPresentation);
+
+            // Export controls
+            document.getElementById('exportJsonBtn').addEventListener('click', exportToJSON);
+            document.getElementById('exportImageBtn').addEventListener('click', exportAsImage);
+            document.getElementById('downloadHtmlBtn').addEventListener('click', downloadAsHTML);
+            document.getElementById('exportPdfBtn').addEventListener('click', () => {
+                alert('PDF export coming soon!');
+            });
+
+            // Import controls
+            document.getElementById('importBtn').addEventListener('click', toggleImportPanel);
+            document.getElementById('closeImportBtn').addEventListener('click', () => {
+                showImportPanel = false;
+                updateImportPanel();
+            });
+
+            // Presentation mode controls
+            document.getElementById('prevSlideBtn').addEventListener('click', previousSlide);
+            document.getElementById('nextSlideBtn').addEventListener('click', nextSlide);
+            document.getElementById('exitPresentationBtn').addEventListener('click', exitPresentation);
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', handleKeyDown);
+
+            // Slide list event delegation
+            document.getElementById('slidesList').addEventListener('click', (e) => {
+                if (e.target.classList.contains('duplicate-slide-btn')) {
+                    e.stopPropagation();
+                    duplicateSlide(parseInt(e.target.dataset.index));
+                } else if (e.target.classList.contains('delete-slide-btn')) {
+                    e.stopPropagation();
+                    if (!e.target.disabled) {
+                        deleteSlide(parseInt(e.target.dataset.index));
+                    }
+                }
+            });
+
+            // Mouse events for drag and resize
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+
+            // Import tab switching
+            document.addEventListener('click', (e) => {
+                if (e.target.classList.contains('import-tab')) {
+                    importTab = e.target.dataset.tab;
+                    
+                    document.querySelectorAll('.import-tab').forEach(tab => {
+                        tab.classList.remove('active', 'bg-blue-50', 'text-blue-600', 'border-b-2', 'border-blue-600');
+                        tab.classList.add('text-gray-600', 'hover:text-gray-900');
+                    });
+                    
+                    e.target.classList.add('active', 'bg-blue-50', 'text-blue-600', 'border-b-2', 'border-blue-600');
+                    e.target.classList.remove('text-gray-600', 'hover:text-gray-900');
+                    
+                    renderImportContent();
+                }
+            });
+
+            // Double-click handling for text editing
+            document.addEventListener('dblclick', (e) => {
+                if (e.target.closest('.slide-element')) {
+                    const elementDiv = e.target.closest('.slide-element');
+                    const elementId = elementDiv.dataset.elementId;
+                    const currentSlide = slides[currentSlideIndex];
+                    const element = currentSlide.elements.find(el => el.id === elementId);
+                    
+                    if (element && element.type === 'text' && !isEditing) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        startEditing(elementId);
+                    }
+                }
+            });
+
+            // Textarea event handling
+            document.addEventListener('input', (e) => {
+                if (e.target.tagName === 'TEXTAREA' && isEditing) {
+                    const elementDiv = e.target.closest('.slide-element');
+                    if (elementDiv) {
+                        updateElement(elementDiv.dataset.elementId, { content: e.target.value });
+                    }
+                }
+            });
+
+            document.addEventListener('blur', (e) => {
+                if (e.target.tagName === 'TEXTAREA' && isEditing) {
+                    stopEditing();
+                }
+            }, true);
+
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'TEXTAREA' && isEditing) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        stopEditing();
+                    } else if (e.key === 'Escape') {
+                        stopEditing();
+                    }
+                    e.stopPropagation();
+                }
+            });
+
+            // Presentation mode click to advance
+            document.getElementById('presentationSlide').addEventListener('click', () => {
+                if (isPresentationMode) {
+                    nextSlide();
+                }
+            });
+        }
+
+        // Event Handlers
+        function handleCanvasClick(e) {
+            if (currentTool === 'select') {
+                selectedElement = null;
+                updateUI();
+                renderCanvas();
+                return;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (currentTool === 'text') {
+                addElement('text', x, y);
+            } else if (['rectangle', 'circle'].includes(currentTool)) {
+                addElement('shape', x, y);
+                setTool('select');
+            }
+        }
+
+        function handleCanvasMouseDown(e) {
+            if (e.target.classList.contains('slide-element') || e.target.closest('.slide-element')) {
+                const elementDiv = e.target.classList.contains('slide-element') 
+                    ? e.target 
+                    : e.target.closest('.slide-element');
+                const elementId = elementDiv.dataset.elementId;
+                
+                if (e.target.classList.contains('resize-handle')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    startResize(elementId, e.target.dataset.handle, e);
+                } else if (!isEditing) {
+                    e.preventDefault();
+                    startDrag(elementId, e);
+                }
+            }
+        }
+
+        function handleKeyDown(e) {
+            if (isPresentationMode) {
+                switch (e.key) {
+                    case 'ArrowRight':
+                    case ' ':
+                    case 'PageDown':
+                        e.preventDefault();
+                        nextSlide();
+                        break;
+                    case 'ArrowLeft':
+                    case 'PageUp':
+                        e.preventDefault();
+                        previousSlide();
+                        break;
+                    case 'Escape':
+                        e.preventDefault();
+                        exitPresentation();
+                        break;
+                    case 'Home':
+                        e.preventDefault();
+                        currentSlideIndex = 0;
+                        renderPresentationSlide();
+                        break;
+                    case 'End':
+                        e.preventDefault();
+                        currentSlideIndex = slides.length - 1;
+                        renderPresentationSlide();
+                        break;
+                }
+                return;
+            }
+
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key) {
+                    case 'z':
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            redo();
+                        } else {
+                            undo();
+                        }
+                        break;
+                    case 'c':
+                        if (selectedElement) {
+                            e.preventDefault();
+                            copyElement();
+                        }
+                        break;
+                    case 'v':
+                        e.preventDefault();
+                        pasteElement();
+                        break;
+                    case 'd':
+                        if (selectedElement) {
+                            e.preventDefault();
+                            duplicateElement();
+                        }
+                        break;
+                }
+            }
+            
+            if (e.key === 'Delete' && selectedElement) {
+                deleteElement(selectedElement);
+            }
+
+            if ((e.key === 'Enter' || e.key === 'F2') && selectedElement) {
+                const currentSlide = slides[currentSlideIndex];
+                const element = currentSlide.elements.find(el => el.id === selectedElement);
+                if (element && element.type === 'text') {
+                    e.preventDefault();
+                    startEditing(selectedElement);
+                }
+            }
+        }
+
+        function startDrag(elementId, e) {
+            selectedElement = elementId;
+            isDragging = true;
+            dragStart = { x: e.clientX, y: e.clientY };
+            updateUI();
+            renderCanvas();
+        }
+
+        function startResize(elementId, handle, e) {
+            selectedElement = elementId;
+            isResizing = true;
+            resizeHandle = handle;
+            dragStart = { x: e.clientX, y: e.clientY };
+        }
+
+        function handleMouseMove(e) {
+            if (!selectedElement) return;
+            
+            const currentSlide = slides[currentSlideIndex];
+            const element = currentSlide.elements.find(el => el.id === selectedElement);
+            if (!element) return;
+
+            const deltaX = e.clientX - dragStart.x;
+            const deltaY = e.clientY - dragStart.y;
+
+            if (isDragging) {
+                updateElement(selectedElement, {
+                    x: Math.max(0, element.x + deltaX),
+                    y: Math.max(0, element.y + deltaY)
+                });
+                dragStart = { x: e.clientX, y: e.clientY };
+            } else if (isResizing) {
+                let newWidth = element.width;
+                let newHeight = element.height;
+                let newX = element.x;
+                let newY = element.y;
+
+                switch (resizeHandle) {
+                    case 'se':
+                        newWidth = Math.max(20, element.width + deltaX);
+                        newHeight = Math.max(20, element.height + deltaY);
+                        break;
+                    case 'sw':
+                        newWidth = Math.max(20, element.width - deltaX);
+                        newHeight = Math.max(20, element.height + deltaY);
+                        newX = element.x + deltaX;
+                        break;
+                    case 'ne':
+                        newWidth = Math.max(20, element.width + deltaX);
+                        newHeight = Math.max(20, element.height - deltaY);
+                        newY = element.y + deltaY;
+                        break;
+                    case 'nw':
+                        newWidth = Math.max(20, element.width - deltaX);
+                        newHeight = Math.max(20, element.height - deltaY);
+                        newX = element.x + deltaX;
+                        newY = element.y + deltaY;
+                        break;
+                    case 'e':
+                        newWidth = Math.max(20, element.width + deltaX);
+                        break;
+                    case 'w':
+                        newWidth = Math.max(20, element.width - deltaX);
+                        newX = element.x + deltaX;
+                        break;
+                    case 'n':
+                        newHeight = Math.max(20, element.height - deltaY);
+                        newY = element.y + deltaY;
+                        break;
+                    case 's':
+                        newHeight = Math.max(20, element.height + deltaY);
+                        break;
+                }
+
+                updateElement(selectedElement, {
+                    x: newX,
+                    y: newY,
+                    width: newWidth,
+                    height: newHeight
+                });
+                dragStart = { x: e.clientX, y: e.clientY };
+            }
+        }
+
+        function handleMouseUp() {
+            if (isDragging || isResizing) {
+                saveToHistory();
+            }
+            isDragging = false;
+            isResizing = false;
+            resizeHandle = '';
+        }
+
+        // Copy/Paste Functions
+        function copyElement() {
+            const currentSlide = slides[currentSlideIndex];
+            const element = currentSlide.elements.find(el => el.id === selectedElement);
+            if (element) {
+                clipboard = { ...element };
+            }
+        }
+
+        function pasteElement() {
+            if (clipboard) {
+                const newElement = {
+                    ...clipboard,
+                    id: Date.now().toString(),
+                    x: clipboard.x + 20,
+                    y: clipboard.y + 20
+                };
+                
+                const currentSlide = slides[currentSlideIndex];
+                currentSlide.elements.push(newElement);
+                selectedElement = newElement.id;
+                renderCanvas();
+                updateUI();
+                saveToHistory();
+            }
+        }
+
+        // Import Panel Functions
+        function toggleImportPanel() {
+            showImportPanel = !showImportPanel;
+            updateImportPanel();
+        }
+
+        function updateImportPanel() {
+            const panel = document.getElementById('importPanel');
+            panel.style.display = showImportPanel ? 'flex' : 'none';
+            
+            if (showImportPanel) {
+                renderImportContent();
+            }
+        }
+
+        function renderImportContent() {
+            const content = document.getElementById('importContent');
+            
+            switch (importTab) {
+                case 'upload':
+                    content.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+                                <input type="file" accept="image/*,video/*,audio/*" id="fileInput" class="hidden">
+                                <label for="fileInput" class="cursor-pointer">
+                                    <div class="text-4xl mb-4">📁</div>
+                                    <p class="text-sm text-gray-600 mb-2">Drop files here or click to upload</p>
+                                    <p class="text-xs text-gray-400">Images, videos, and audio files</p>
+                                </label>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+                    break;
+                    
+                case 'search':
+                    const stockImages = [
+                        'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=400&h=300&fit=crop',
+                        'https://images.unsplash.com/photo-1573833165854-30b95a2d0e84?w=400&h=300&fit=crop',
+                        'https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=400&h=300&fit=crop',
+                        'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop'
+                    ];
+                    
+                    content.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="relative">
+                                <input type="text" placeholder="Search for images..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg">
+                                <div class="absolute left-3 top-1/2 transform -translate-y-1/2">🔍</div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                ${stockImages.map((imageUrl, index) => `
+                                    <div class="aspect-square bg-gray-100 rounded cursor-pointer hover:ring-2 hover:ring-blue-500 overflow-hidden" 
+                                         onclick="addImageFromUrl('${imageUrl}')">
+                                        <img src="${imageUrl}" alt="Stock image ${index + 1}" class="w-full h-full object-cover">
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'url':
+                    content.innerHTML = `
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Image URL</label>
+                                <input type="url" id="urlInput" placeholder="https://example.com/image.jpg" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                            </div>
+                            <button onclick="importFromUrl()" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">
+                                Import from URL
+                            </button>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'icons':
+                    const icons = ['→', '←', '↑', '↓', '★', '♥', '✓', '✗', '+', '-', '?', '!'];
+                    content.innerHTML = `
+                        <div class="space-y-4">
+                            <h4 class="text-sm font-medium text-gray-700">Symbols & Icons</h4>
+                            <div class="grid grid-cols-4 gap-2">
+                                ${icons.map(icon => `
+                                    <button class="aspect-square bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg flex items-center justify-center text-2xl transition-colors"
+                                            onclick="addIconElement('${icon}')">
+                                        ${icon}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                    break;
+            }
+        }
+
+        // Import Functions
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const imageUrl = e.target.result;
+                    addElement('image', 100, 100, imageUrl);
+                    showImportPanel = false;
+                    updateImportPanel();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function addImageFromUrl(imageUrl) {
+            addElement('image', 100, 100, imageUrl);
+            showImportPanel = false;
+            updateImportPanel();
+        }
+
+        function importFromUrl() {
+            const urlInput = document.getElementById('urlInput');
+            if (urlInput && urlInput.value.trim()) {
+                addElement('image', 100, 100, urlInput.value);
+                showImportPanel = false;
+                updateImportPanel();
+            }
+        }
+
+        function addIconElement(icon) {
+            const currentSlide = slides[currentSlideIndex];
+            const newElement = {
+                id: Date.now().toString(),
+                type: 'text',
+                x: 100,
+                y: 100,
+                width: 80,
+                height: 80,
+                rotation: 0,
+                content: icon,
+                style: {
+                    fontSize: 48,
+                    color: '#3b82f6',
+                    textAlign: 'center',
+                    zIndex: currentSlide.elements.length + 1
+                },
+                visible: true,
+                locked: false
+            };
+
+            currentSlide.elements.push(newElement);
+            selectedElement = newElement.id;
+            showImportPanel = false;
+            updateImportPanel();
+            renderCanvas();
+            updateUI();
+            saveToHistory();
+        }
+
+        // Export Functions
+        function exportToJSON() {
+            const slideData = {
+                title: 'OPP Presentation',
+                slides: slides.map(slide => ({
+                    title: slide.title,
+                    elements: slide.elements.map(el => ({
+                        type: el.type,
+                        content: el.content,
+                        style: el.style
+                    }))
+                }))
+            };
+            
+            const dataStr = JSON.stringify(slideData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'opp-presentation.json';
+            link.click();
+            
+            URL.revokeObjectURL(url);
+        }
+
+        function exportAsImage() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = 800;
+            canvas.height = 600;
+            
+            const currentSlide = slides[currentSlideIndex];
+            
+            // Fill background
+            ctx.fillStyle = currentSlide.backgroundColor;
+            ctx.fillRect(0, 0, 800, 600);
+            
+            // Simple text rendering for current slide
+            currentSlide.elements
+                .filter(el => el.visible && el.type === 'text')
+                .forEach(element => {
+                    ctx.fillStyle = element.style?.color || '#000000';
+                    ctx.font = `${element.style?.fontSize || 16}px Arial`;
+                    ctx.fillText(element.content || '', element.x, element.y + (element.style?.fontSize || 16));
+                });
+            
+            // Download as image
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `opp-slide-${currentSlideIndex + 1}.png`;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                }
+            });
+        }
+
+        function downloadAsHTML() {
+            const htmlTemplate = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPP Presentation - Offline Ready</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: system-ui, sans-serif; background: #f8fafc; }
+        .presentation-viewer { max-width: 1200px; margin: 0 auto; }
+        .slide { width: 800px; height: 600px; margin: 20px auto; border: 1px solid #e5e7eb; position: relative; background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .slide-element { position: absolute; }
+        .controls { text-align: center; margin: 20px 0; }
+        .btn { background: #3b82f6; color: white; border: none; padding: 12px 24px; margin: 0 8px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .btn:hover { background: #2563eb; }
+        .btn:disabled { background: #9ca3af; cursor: not-allowed; }
+        .btn.present { background: #059669; }
+        .presentation-mode { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 1000; display: none; }
+        .presentation-slide { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .presentation-controls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 15px 25px; border-radius: 12px; }
+        .presentation-controls button { background: none; border: none; color: white; padding: 8px 16px; margin: 0 5px; cursor: pointer; border-radius: 6px; }
+        .presentation-controls button:hover { background: rgba(255,255,255,0.2); }
+        .help-text { color: #6b7280; font-size: 14px; text-align: center; margin: 20px 0; }
+        .title-header { text-align: center; margin-bottom: 40px; }
+        .title-header h1 { color: #3b82f6; margin-bottom: 10px; font-size: 2.5rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="presentation-viewer">
+        <div class="title-header">
+            <h1>📊 OPP - Offline Presentation Pro</h1>
+            <p style="color: #6b7280; font-size: 1.1rem;">Your presentation is ready! This file works completely offline.</p>
+        </div>
+        <div class="controls">
+            <button class="btn" onclick="previousSlide()">← Previous</button>
+            <span style="margin: 0 20px; font-weight: bold;"><span id="current">1</span> / <span id="total">${slides.length}</span></span>
+            <button class="btn" onclick="nextSlide()">Next →</button>
+            <button class="btn present" onclick="startPresentation()">🎬 Start Presentation</button>
+        </div>
+        <div id="slideContainer" class="slide"></div>
+        <div class="help-text">
+            <p><strong>Presentation Mode:</strong> Arrow keys to navigate • ESC to exit • Click anywhere to advance</p>
+            <p><strong>Offline Ready:</strong> This file works without internet!</p>
+        </div>
+    </div>
+    <div id="presentationMode" class="presentation-mode">
+        <div id="presentationSlide" class="presentation-slide"></div>
+        <div class="presentation-controls">
+            <button onclick="previousSlide()">← Previous</button>
+            <span style="color: white; margin: 0 15px;"><span id="presentCurrent">1</span> / <span id="presentTotal">${slides.length}</span></span>
+            <button onclick="nextSlide()">Next →</button>
+            <button onclick="exitPresentation()">✕ Exit</button>
+        </div>
+    </div>
+    <script>
+        const slides = ${JSON.stringify(slides, null, 4)};
+        let currentSlideIndex = ${currentSlideIndex};
+        let isPresentationMode = false;
+        function renderSlide(slideIndex) {
+            const slide = slides[slideIndex];
+            const container = document.getElementById('slideContainer');
+            const presentationSlide = document.getElementById('presentationSlide');
+            const slideHtml = \`<div style="width: 100%; height: 100%; background-color: \${slide.backgroundColor}; position: relative;">\${slide.elements.filter(el => el.visible).sort((a, b) => (a.style?.zIndex || 1) - (b.style?.zIndex || 1)).map(element => {
+                const style = \`position: absolute; left: \${element.x}px; top: \${element.y}px; width: \${element.width}px; height: \${element.height}px; transform: rotate(\${element.rotation}deg); opacity: \${element.style?.opacity || 1}; z-index: \${element.style?.zIndex || 1};\`;
+                if (element.type === 'text') {
+                    const textStyle = element.style || {};
+                    return \`<div style="\${style}"><div style="width: 100%; height: 100%; display: flex; align-items: center; padding: 0 8px; font-size: \${textStyle.fontSize || 16}px; color: \${textStyle.color || '#000'}; font-weight: \${textStyle.fontWeight || 'normal'}; font-style: \${textStyle.fontStyle || 'normal'}; text-align: \${textStyle.textAlign || 'left'}; white-space: pre-wrap;">\${element.content || ''}</div></div>\`;
+                } else if (element.type === 'image') {
+                    return \`<div style="\${style}"><img src="\${element.content}" alt="Slide content" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;"></div>\`;
+                } else if (element.type === 'shape') {
+                    const borderRadius = element.shapeType === 'circle' ? '50%' : '4px';
+                    return \`<div style="\${style}"><div style="width: 100%; height: 100%; background-color: \${element.style?.backgroundColor || '#3b82f6'}; border-radius: \${borderRadius};"></div></div>\`;
+                }
+                return '';
+            }).join('')}</div>\`;
+            (isPresentationMode ? presentationSlide : container).innerHTML = slideHtml;
+            document.getElementById('current').textContent = slideIndex + 1;
+            document.getElementById('presentCurrent').textContent = slideIndex + 1;
+        }
+        function nextSlide() { if (currentSlideIndex < slides.length - 1) { currentSlideIndex++; renderSlide(currentSlideIndex); } }
+        function previousSlide() { if (currentSlideIndex > 0) { currentSlideIndex--; renderSlide(currentSlideIndex); } }
+        function startPresentation() { isPresentationMode = true; currentSlideIndex = 0; document.getElementById('presentationMode').style.display = 'block'; renderSlide(currentSlideIndex); }
+        function exitPresentation() { isPresentationMode = false; document.getElementById('presentationMode').style.display = 'none'; renderSlide(currentSlideIndex); }
+        document.addEventListener('keydown', (e) => {
+            if (isPresentationMode) {
+                switch (e.key) {
+                    case 'ArrowRight': case ' ': e.preventDefault(); nextSlide(); break;
+                    case 'ArrowLeft': e.preventDefault(); previousSlide(); break;
+                    case 'Escape': e.preventDefault(); exitPresentation(); break;
+                }
+            }
+        });
+        document.getElementById('presentationSlide').addEventListener('click', () => { if (isPresentationMode) nextSlide(); });
+        document.getElementById('total').textContent = slides.length;
+        document.getElementById('presentTotal').textContent = slides.length;
+        renderSlide(currentSlideIndex);
+        console.log('📊 OPP Presentation loaded!', slides.length, 'slides');
+    </script>
+</body>
+</html>`;
+            
+            const blob = new Blob([htmlTemplate], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'opp-presentation-offline.html';
+            link.click();
+            URL.revokeObjectURL(url);
+            
+            alert('✅ Downloaded! Your presentation is now saved as a complete HTML file that works offline.');
+        }
+
+        // Presentation Mode Functions
+        function startPresentation() {
+            isPresentationMode = true;
+            currentSlideIndex = 0;
+            document.getElementById('presentationMode').style.display = 'block';
+            renderPresentationSlide();
+            updatePresentationControls();
+            
+            setTimeout(() => {
+                document.getElementById('presentationMode').focus();
+            }, 100);
+        }
+
+        function exitPresentation() {
+            isPresentationMode = false;
+            document.getElementById('presentationMode').style.display = 'none';
+        }
+
+        function nextSlide() {
+            if (currentSlideIndex < slides.length - 1) {
+                currentSlideIndex++;
+                renderPresentationSlide();
+                updatePresentationControls();
+            }
+        }
+
+        function previousSlide() {
+            if (currentSlideIndex > 0) {
+                currentSlideIndex--;
+                renderPresentationSlide();
+                updatePresentationControls();
+            }
+        }
+
+        function renderPresentationSlide() {
+            const presentationSlide = document.getElementById('presentationSlide');
+            const currentSlide = slides[currentSlideIndex];
+            
+            presentationSlide.style.backgroundColor = currentSlide.backgroundColor;
+            presentationSlide.innerHTML = '';
+
+            const sortedElements = [...currentSlide.elements]
+                .filter(el => el.visible)
+                .sort((a, b) => (a.style?.zIndex || 1) - (b.style?.zIndex || 1));
+
+            sortedElements.forEach(element => {
+                const elementDiv = document.createElement('div');
+                elementDiv.style.cssText = `
+                    position: absolute;
+                    left: ${(element.x / 800) * 100}%;
+                    top: ${(element.y / 600) * 100}%;
+                    width: ${(element.width / 800) * 100}%;
+                    height: ${(element.height / 600) * 100}%;
+                    transform: rotate(${element.rotation}deg);
+                    opacity: ${element.style?.opacity || 1};
+                    z-index: ${element.style?.zIndex || 1};
+                `;
+
+                if (element.type === 'text') {
+                    const textStyle = element.style || {};
+                    elementDiv.innerHTML = `
+                        <div style="width: 100%; height: 100%; display: flex; align-items: center;
+                                    font-size: ${textStyle.fontSize || 16}px; 
+                                    color: ${textStyle.color || '#000'}; 
+                                    font-weight: ${textStyle.fontWeight || 'normal'}; 
+                                    font-style: ${textStyle.fontStyle || 'normal'}; 
+                                    text-align: ${textStyle.textAlign || 'left'};">
+                            ${element.content}
+                        </div>
+                    `;
+                } else if (element.type === 'image') {
+                    elementDiv.innerHTML = `<img src="${element.content}" alt="Slide content" style="width: 100%; height: 100%; object-fit: cover;">`;
+                } else if (element.type === 'shape') {
+                    const borderRadius = element.shapeType === 'circle' ? '50%' : '0';
+                    elementDiv.innerHTML = `<div style="width: 100%; height: 100%; background-color: ${element.style?.backgroundColor || '#3b82f6'}; border-radius: ${borderRadius};"></div>`;
+                }
+
+                presentationSlide.appendChild(elementDiv);
+            });
+        }
+
+        function updatePresentationControls() {
+            document.getElementById('slideCounter').textContent = `${currentSlideIndex + 1} / ${slides.length}`;
+            document.getElementById('prevSlideBtn').disabled = currentSlideIndex === 0;
+            document.getElementById('nextSlideBtn').disabled = currentSlideIndex === slides.length - 1;
+        }
+
+        // Initialize the application
+        init();
+    </script>
+</body>
+</html>
